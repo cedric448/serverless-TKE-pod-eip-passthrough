@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Environment & secrets — never commit these
+.env
+*.env
+kubeconfig
+kubeconfig.yaml
+*-config.yaml
+*-kubeconfig
+*-kubeconfig.yaml
+
+# Project-specific sensitive files
+p.md
+src/config_local.py
+
+# Original root-level code files (moved to src/ — ignore duplicates at root)
+/config.py
+/create_pod.py
+/list_pods.py
+/delete_pod.py
