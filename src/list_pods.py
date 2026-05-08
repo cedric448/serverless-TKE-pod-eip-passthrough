@@ -85,7 +85,7 @@ def main():
         pod_ip = (pod.status.pod_ip or "-")
         node = (pod.spec.node_name or "-")
         created = (
-            pod.metadata.creation_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            pod.metadata.creation_timestamp.astimezone().strftime("%Y-%m-%d %H:%M:%S")
             if pod.metadata.creation_timestamp
             else "-"
         )
