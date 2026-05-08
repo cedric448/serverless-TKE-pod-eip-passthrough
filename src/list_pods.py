@@ -6,13 +6,32 @@ Usage:
     python list_pods.py
 
 Output columns:
-    NAME | STATUS | POD IP | NODE | CREATED | EIP ID
+    NAME | STATUS | POD IP | NODE | CREATED | EIP ID | EIP IP
 """
 import sys
 
 from kubernetes.client.rest import ApiException
+from tencentcloud.common.exception.tencent_cloud_sdk_exception import TencentCloudSDKException
+from tencentcloud.vpc.v20170312 import models as vpc_models
 
 import config
+
+
+def query_eip_addresses(eip_ids):
+    """Query EIP public IPs by their IDs. Returns dict {eip_id: public_ip}."""
+    if not eip_ids:
+        return {}
+    try:
+        vpc = config.get_vpc_client()
+        req = vpc_models.DescribeAddressesRequest()
+        req.AddressIds = eip_ids
+        resp = vpc.DescribeAddresses(req)
+        return {
+            addr.AddressId: addr.AddressIp
+            for addr in (resp.AddressSet or [])
+        }
+    except TencentCloudSDKException:
+        return {}
 
 
 def main():
@@ -35,17 +54,30 @@ def main():
         print(f"[INFO] No pods found in namespace '{config.NAMESPACE}'.")
         return
 
-    col_name = 30
-    col_status = 12
-    col_ip = 16
-    col_node = 40
-    col_created = 22
+    # Collect all EIP IDs to batch query
+    pod_eip_map = {}
+    for pod in pods.items:
+        annotations = pod.metadata.annotations or {}
+        eip_id = annotations.get("tke.cloud.tencent.com/eip-id", "")
+        if eip_id:
+            pod_eip_map[pod.metadata.name] = eip_id
+
+    # Batch query EIP public IPs via VPC SDK
+    eip_ip_map = query_eip_addresses(list(pod_eip_map.values()))
+
+    col_name = 25
+    col_status = 10
+    col_podip = 16
+    col_node = 36
+    col_created = 20
+    col_eipid = 16
     header = (
-        f"{'NAME':<{col_name}} {'STATUS':<{col_status}} {'POD IP':<{col_ip}}"
-        f" {'NODE':<{col_node}} {'CREATED':<{col_created}} EIP"
+        f"{'NAME':<{col_name}} {'STATUS':<{col_status}} {'POD IP':<{col_podip}}"
+        f" {'NODE':<{col_node}} {'CREATED':<{col_created}}"
+        f" {'EIP ID':<{col_eipid}} EIP IP"
     )
     print(header)
-    print("-" * (len(header) + 10))
+    print("-" * len(header))
 
     for pod in pods.items:
         name = pod.metadata.name or "-"
@@ -58,11 +90,12 @@ def main():
             else "-"
         )
         annotations = pod.metadata.annotations or {}
-        # TKE writes the allocated EIP ID into this annotation after binding
-        eip = annotations.get("tke.cloud.tencent.com/eip-id", "-")
+        eip_id = annotations.get("tke.cloud.tencent.com/eip-id", "-")
+        eip_ip = eip_ip_map.get(eip_id, "-")
         print(
-            f"{name:<{col_name}} {phase:<{col_status}} {pod_ip:<{col_ip}}"
-            f" {node:<{col_node}} {created:<{col_created}} {eip}"
+            f"{name:<{col_name}} {phase:<{col_status}} {pod_ip:<{col_podip}}"
+            f" {node:<{col_node}} {created:<{col_created}}"
+            f" {eip_id:<{col_eipid}} {eip_ip}"
         )
 
 
